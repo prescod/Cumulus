@@ -161,10 +161,16 @@ public class BDI_Donations {
         List<DataImport__c> dataImportsToUpdate = new List<DataImport__c>();
 
         for (DataImport__c dataImport : dataImportDonations) {
-
-            // don't process opps in the case of user-selected Apply New Payment
-            if (dataImport.DonationImportStatus__c != Label.bdiMatchedApplyNewPayment) {
-
+            if (dataImport.DonationImportStatus__c == Label.bdiMatchedApplyNewPayment) {
+                // park a new empty payment in the map if the user specified Apply New Payment
+                paymentsByDataImportId.put(
+                        dataImport.Id,
+                        new npe01__OppPayment__c(
+                                npe01__Opportunity__c = dataImport.DonationImported__c
+                        )
+                );
+                dataImport.PaymentImportStatus__c = Label.bdiCreated;
+            } else {
                 // validate against our desired matching behavior (exact match, best match, new, etc.)
                 if (!isValidMatchBehavior(dataImport, matchBehavior)) {
                     continue;
@@ -190,15 +196,6 @@ public class BDI_Donations {
                 if (Test.isRunningTest() && opp.Name != null && opp.Name.startsWith('FailTest')) {
                     opp.Name = null;
                 }
-            } else if (dataImport.DonationImportStatus__c == Label.bdiMatchedApplyNewPayment) {
-                // park a new empty payment in the map if the user specified Apply New Payment
-                paymentsByDataImportId.put(
-                        dataImport.Id,
-                        new npe01__OppPayment__c(
-                                npe01__Opportunity__c = dataImport.DonationImported__c
-                        )
-                );
-                dataImport.PaymentImportStatus__c = Label.bdiCreated;
             }
         }
 
@@ -443,9 +440,9 @@ public class BDI_Donations {
             }
         }
 
-        String donationRecordTypeName = UTIL_Namespace.StrTokenNSPrefix('Donation_Record_Type_Name__c').toLowerCase();
-        String donationStage = UTIL_Namespace.StrTokenNSPrefix('Donation_Stage__c').toLowerCase();
-        String donationAmount = UTIL_Namespace.StrTokenNSPrefix('Donation_Amount__c').toLowerCase();
+        String donationRecordTypeName = UTIL_Namespace.StrTokenNSPrefix('Donation_Record_Type_Name__c');
+        String donationStage = UTIL_Namespace.StrTokenNSPrefix('Donation_Stage__c');
+        String donationAmount = UTIL_Namespace.StrTokenNSPrefix('Donation_Amount__c');
 
         // now copy over all the data to the Opp
         for (String dataImportField : dataImportFieldToOpportunityField.keySet()) {
@@ -455,14 +452,10 @@ public class BDI_Donations {
                 continue;
             }
 
-            // only look at Stage and Amount if we aren't applying a new Payment
-            if (dataImport.DonationImportStatus__c != System.Label.bdiMatchedApplyNewPayment) {
-                // only honor Stage if we aren't updating its payment
-                if (dataImportField == donationStage && dataImport.PaymentImported__c != null) {
-                    continue;
-                }
-                // only honor Amount if we aren't updating its payment
-                if (dataImportField == donationAmount && dataImport.PaymentImported__c != null) {
+            // Don't copy over Stage or Amount if we are applying a new Payment or updating a Payment
+            if (dataImportField == donationStage || dataImportField == donationAmount) {
+                if (dataImport.DonationImportStatus__c != System.Label.bdiMatchedApplyNewPayment
+                        && dataImport.PaymentImported__c != null) {
                     continue;
                 }
             }
