@@ -70,13 +70,6 @@ public with sharing class BDI_FieldMappingHelpText implements BDI_FieldMapping {
     }
 
     /*******************************************************************************************************
-    * @description flag to allow us to test out field level security exception
-    *
-    * TODO: refactor tests to make this unneccessary
-    */
-    public Boolean failFieldLevelSecurity = false;
-
-    /*******************************************************************************************************
     * @description For the provided fields (in the form DIObject.developerfieldname) and target object, 
     * return a map of DI field (key) to mapped field name on the destination record (value). 
     *
@@ -116,26 +109,6 @@ public with sharing class BDI_FieldMappingHelpText implements BDI_FieldMapping {
                         }
                     }
 
-                    // make sure they have permissions to modify the target field
-                    // we can't do this in all tests, because many profiles won't have FLS set for all our new fields!
-                    // TODO: Remove the need for test context / fail boolean, perhaps by using a mock to set test behavior
-                    if (!Test.isRunningTest() || failFieldLevelSecurity) {
-                        fieldDescribe = UTIL_Describe.getFieldDescribe(targetObjectName, fieldName);
-                        Set<String> setAuditFields = new Set<String>{
-                            'createddate', 'createdbyid', 'lastmodifieddate', 'lastmodifiedbyid'
-                        };
-                        Boolean isAuditField = setAuditFields.contains(fieldName.toLowerCase());
-
-                        if (failFieldLevelSecurity ||
-                            fieldDescribe == null ||
-                            !fieldDescribe.isCreateable() ||
-                            (!isAuditField && !fieldDescribe.isUpdateable())) {
-                                throw (new FLSException(
-                                    String.format(System.Label.flsError, new List<String>{ targetObjectName + '.' + fieldName }
-                                )));
-                        }
-                    }
-
                     dataImportFieldToTargetField.put(dataImportField, fieldName);
                 }
             }
@@ -147,7 +120,8 @@ public with sharing class BDI_FieldMappingHelpText implements BDI_FieldMapping {
 
         if(additionalFieldMappings.containsKey(targetObjectName)) {
             for(String diField: additionalFieldMappings.get(targetObjectName).keySet()) {
-                dataImportFieldToTargetField.put(diField, additionalFieldMappings.get(targetObjectName).get(diField));
+                dataImportFieldToTargetField.put(diField, 
+                    additionalFieldMappings.get(targetObjectName).get(diField));
             }
         }
 
@@ -176,10 +150,4 @@ public with sharing class BDI_FieldMappingHelpText implements BDI_FieldMapping {
     public Boolean isCurrencyMapped(String objectName) {
         return objectName.equalsIgnoreCase('Opportunity');
     }
-
-    /*******************************************************************************************************
-    * @description our exception object for Field Level Security errors.
-    */
-    public class FLSException extends Exception {}
-
 }
