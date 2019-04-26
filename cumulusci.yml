@@ -104,6 +104,15 @@ tasks:
             output: text
             runAllApex: False
             htmlfilename: 'pmd.html'
+    
+    synthesize_business_process:
+        description: Introspect available Stages and synthesize and deploy an Opportunity Business Process and Record Type
+        class_path: tasks.synthesize_business_process.SynthesizeBusinessProcess
+        options:
+            business_process_name: "NPSP_Default"
+            record_type_developer_name: "NPSP_Default"
+            record_type_label: "NPSP Default"
+            sobject: "Opportunity"
 
     test_data_dev_org:
         description: 'Loads a test data set for most NPSP objects based on 100 Contacts that should fit into a scratch org or DE org'
