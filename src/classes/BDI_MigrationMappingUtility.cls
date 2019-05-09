@@ -40,13 +40,27 @@ public class BDI_MigrationMappingUtility {
     public List<Metadata.CustomMetadata> queuedMetadataTypesForDeploy = new List<Metadata.CustomMetadata>();
 
     /** @description Metadata parked due to conflicts with our default cmt records */
-    public List<BDI_HelpTextCMT.DataImportFieldMapping> conflictingCMTs = new List<BDI_HelpTextCMT.DataImportFieldMapping>();
+    public List<BDI_HelpTextCMT.DataImportFieldMapping> conflictingMappings = new List<BDI_HelpTextCMT.DataImportFieldMapping>();
 
-    /** @description Metadata parked due to conflicts with our default cmt records */
-    public List<BDI_HelpTextCMT.DataImportFieldMapping> pendingCMTs = new List<BDI_HelpTextCMT.DataImportFieldMapping>();
+    /** @description List of new mappings */
+    public List<BDI_HelpTextCMT.DataImportFieldMapping> pendingMappings = new List<BDI_HelpTextCMT.DataImportFieldMapping>();
+
+    /** @description List of standard mappings */
+    public List<BDI_HelpTextCMT.DataImportFieldMapping> pendingStandardMappings = new List<BDI_HelpTextCMT.DataImportFieldMapping>();
 
     /** @description Unique job id for Custom Settings */
     public String jobId = getUniqueJobId();
+
+    public Metadata.CustomMetadata createNewFieldMappingSet(String fieldMappingName) {
+        System.debug('createNewFieldMappingSet');
+
+        BDI_HelpTextCMT.DataImportFieldMappingSet fieldMappingSet =
+            new BDI_HelpTextCMT.DataImportFieldMappingSet(fieldMappingName, DEFAULT_OBJECT_MAPPING_SET_RECORD_NAME);
+
+        System.debug(fieldMappingSet.getMetadataRecord());
+
+        return fieldMappingSet.getMetadataRecord();
+    }
 
     /**
      * @description Calls method for building custom metadata mapping from help text mapping
@@ -55,11 +69,13 @@ public class BDI_MigrationMappingUtility {
      * object and is needed to ensure that the status retrieved from that custom settings object is for this
      * particular deployment and not a previous one.
      */
-    public String convertLegacyHelpTextToCustomMetadata() {
+    public String convertLegacyHelpTextToCustomMetadata(Boolean keepCustomizations) {
+        CMT_MetadataAPI.Source source =
+            (keepCustomizations ? CMT_MetadataAPI.Source.CUSTOM_HELP_TEXT_MIGRATION : CMT_MetadataAPI.Source.HELP_TEXT_MIGRATION);
 
         if (!queuedMetadataTypesForDeploy.isEmpty()) {
             CMT_MetadataAPI.deployMetadata(jobId, queuedMetadataTypesForDeploy.clone(), 
-                CMT_MetadataAPI.Source.HELP_TEXT_MIGRATION);
+                source);
         } else {
             // Queue is empty, but we still need to update Data Import settings
             updateCustomDataImportSettings(jobId, Label.bdiCustomObjectMappingSummary);
@@ -74,7 +90,29 @@ public class BDI_MigrationMappingUtility {
      */
     private void updateCustomDataImportSettings(String jobId, String fieldMappingMethod) {
         Map<String, String> statusMap = new Map<String, String>{jobId => 'Queue was empty'};
-        CMT_MetadataAPI.setHelpTextMigrationSettings(statusMap, true);
+        CMT_MetadataAPI.setHelpTextMigrationSettings(statusMap, true, CMT_MetadataAPI.Source.HELP_TEXT_MIGRATION);
+    }
+
+    public List<Metadata.CustomMetadata> updateCustomMetadataRecords(String fieldMappingSetName, List<BDI_HelpTextCMT.DataImportFieldMapping> fieldMappings) {
+        System.debug('updateCustomMetadataRecords');
+        Map<String, Data_Import_Field_Mapping__mdt> existingFieldMappings =
+            getFieldMappingsByDeveloperName(fieldMappingSetName);
+        List<Metadata.CustomMetadata> updatedCMTs = new List<Metadata.CustomMetadata>();
+
+        for (BDI_HelpTextCMT.DataImportFieldMapping fieldMapping : fieldMappings) {
+            Data_Import_Field_Mapping__mdt existingDefaultFieldMapping =
+                    existingFieldMappings.get(fieldMapping.sourceFieldAPIName);
+            System.debug('==========================');
+            System.debug(existingDefaultFieldMapping);
+            Metadata.CustomMetadata updatedCMT = fieldMapping.getMetadataRecord();
+            System.debug(updatedCMT);
+            List<String> nameParts = updatedCMT.fullName.split('\\.', 2);
+            System.debug(nameParts);
+            updatedCMT.fullName = nameParts[0] + '.' + existingDefaultFieldMapping.DeveloperName;
+            updatedCMTs.add(updatedCMT);
+        }
+
+        return updatedCMTs;
     }
 
     /**
@@ -82,13 +120,16 @@ public class BDI_MigrationMappingUtility {
      * Type records reserve all non-standard NPSP Help Text mappings. What to do with reserved list of Help 
      * Text mappings TBD.
      */
-    public void buildCustomMetadataRecordsFromHelpText() {
+    public void buildCustomMetadataRecordsFromHelpText(String fieldMappingSetName) {
+        System.debug('buildCustomMetadataRecordsFromHelpText');
+        System.debug('fieldMappingSetName: ' + fieldMappingSetName);
 
         Map<String, BDI_HelpTextCMT.MappingDetail> listHelpTextFieldDetails = getAllMappedHelpTextFields();
         Map<String, Data_Import_Object_Mapping__mdt> existingObjectMappings = 
             getDefaultObjectMappings(DEFAULT_OBJECT_MAPPING_SET.Id);
-        Map<String, Data_Import_Field_Mapping__mdt> existingFieldMappings = 
-            getDefaultFieldMappings(DEFAULT_FIELD_MAPPING_SET.Id);
+        Map<String, Data_Import_Field_Mapping__mdt> existingFieldMappings =
+            getFieldMappingsByDeveloperName(fieldMappingSetName);
+        System.debug(existingFieldMappings);
 
         for (String key : listHelpTextFieldDetails.keySet()) {
 
@@ -109,28 +150,29 @@ public class BDI_MigrationMappingUtility {
                     // New Field Mapping, not part of our initial config
                     setFieldMappingValues(fieldMapping, existingDefaultObjectMapping, null);
 
-                    // Add metadata record to queue for deployment
-                    queuedMetadataTypesForDeploy.add(fieldMapping.getMetadataRecord());
-                    pendingCMTs.add(fieldMapping);
+                    // Add mapping to pending list
+                    pendingMappings.add(fieldMapping);
                 } else if (foundDefaultFieldMapping) {
                     // Existing Field Mapping, check if CMTs field values match Help Text field values
                     Boolean invalidFieldMapping = foundDefaultFieldMappingMismatch(fieldMapping, 
                             existingDefaultFieldMapping, 
                             existingDefaultObjectMapping);
 
-                    if (invalidFieldMapping) {
-                        // Add metadata record to queue for deployment
-                        setFieldMappingValues(fieldMapping, 
+                    setFieldMappingValues(fieldMapping,
                             existingDefaultObjectMapping, 
                             existingDefaultFieldMapping);
 
+                    if (invalidFieldMapping) {
                         // If existing help text mapping doesn't match our packaged cmt record, park the mapping
                         fieldMapping.expectedHelpTextValue =
                             existingDefaultFieldMapping.Target_Object_Mapping__r.Object_API_Name__c
                             + '.'
                             + existingDefaultFieldMapping.Target_Field_API_Name__c;
 
-                        conflictingCMTs.add(fieldMapping);
+                        // Add mapping to conflicting list
+                        conflictingMappings.add(fieldMapping);
+                    } else {
+                        pendingStandardMappings.add(fieldMapping);
                     }
                 }
             }
@@ -332,7 +374,7 @@ public class BDI_MigrationMappingUtility {
      * @param fieldMappingSetId Id of the default Field Mapping Set
      * @return Collection of Field Mapping DeveloperName to Field Mapping record
      */
-    private Map<String, Data_Import_Field_Mapping__mdt> getDefaultFieldMappings(Id fieldMappingSetId) {
+    private Map<String, Data_Import_Field_Mapping__mdt> getFieldMappingsByDeveloperName(String developerName) {
         List<Data_Import_Field_Mapping__mdt> existingFieldMappings = [SELECT 
                     Id, 
                     Label, 
@@ -345,7 +387,7 @@ public class BDI_MigrationMappingUtility {
                     Target_Object_Mapping__r.Object_API_Name__c,
                     Is_Deleted__c
             FROM Data_Import_Field_Mapping__mdt
-            WHERE Data_Import_Field_Mapping_Set__c = :fieldMappingSetId];
+            WHERE Data_Import_Field_Mapping_Set__r.DeveloperName = :developerName];
 
         Map<String, Data_Import_Field_Mapping__mdt> diFieldNameToFieldMappingMap = 
             new Map<String, Data_Import_Field_Mapping__mdt>();
@@ -370,6 +412,9 @@ public class BDI_MigrationMappingUtility {
 
     /** @description Name of default packaged Field Mapping Set */
     private static final String DEFAULT_FIELD_MAPPING_SET_RECORD_NAME = 'Default_Field_Mapping_Set';
+
+    /** @description Name of migrated custom Field Mapping Set */
+    private static final String MIGRATED_FIELD_MAPPING_SET_RECORD_NAME = 'Migrated_Custom_Mapping_Set';
 
     /** @description Default packaged Object Mapping Set metadata record */
     private static final Data_Import_Object_Mapping_Set__mdt DEFAULT_OBJECT_MAPPING_SET = [SELECT 
