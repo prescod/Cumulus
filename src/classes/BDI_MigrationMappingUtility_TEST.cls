@@ -9,14 +9,14 @@ private class BDI_MigrationMappingUtility_TEST {
     static void migrationUtilityCreatesCustomMetadataRecordsFromHelpText() {
         //1. Set the mock
         // Create a mock version of the BDI_MigrationUtilityHelper class.
-        BDI_MigrationMappingHelper mockMigrationMappingHelper =
+        BDI_MigrationMappingHelper mock_BDI_MigrationMappingHelper =
                 (BDI_MigrationMappingHelper) Test.createStub(
                         BDI_MigrationMappingHelper.class,
                         new BDI_MigrationMappingHelperMock());
 
         //2. Call the method
         BDI_MigrationMappingUtility util = new BDI_MigrationMappingUtility();
-        util.buildCustomMetadataRecordsFromHelpText();
+        util.buildCustomMetadataRecordsFromHelpText(mock_BDI_MigrationMappingHelper);
 
         //3. Verify results
         List<Data_Import_Field_Mapping__mdt> dataImportFieldMappings = getDataImportFieldMappings();

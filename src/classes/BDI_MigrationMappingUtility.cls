@@ -82,9 +82,8 @@ public class BDI_MigrationMappingUtility {
      * Type records reserve all non-standard NPSP Help Text mappings. What to do with reserved list of Help 
      * Text mappings TBD.
      */
-    public void buildCustomMetadataRecordsFromHelpText() {
+    public void buildCustomMetadataRecordsFromHelpText(BDI_MigrationMappingHelper helper) {
 
-        BDI_MigrationMappingHelper helper = new BDI_MigrationMappingHelper();
         Map<String, BDI_HelpTextCMT.MappingDetail> listHelpTextFieldDetails =
                 helper.getAllMappedHelpTextFields();
 
