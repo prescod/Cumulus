@@ -40,13 +40,33 @@ public class BDI_MigrationMappingHelperMock implements System.StubProvider {
             Type returnType, List<Type> listOfParamTypes, List<String> listOfParamNames,
             List<Object> listOfArgs) {
 
+        System.debug(LoggingLevel.ERROR, '*** ##### in handleMethodCall ######');
+        System.debug(LoggingLevel.ERROR, '*** variable value stubbedMethodName: ' + stubbedMethodName);
+
         if (stubbedMethodName == 'getAllMappedHelpTextFields') {
+            BDI_HelpTextCMT.MappingDetail mapping1 = new BDI_HelpTextCMT.MappingDetail(
+                    'test1_dataImportObjectName',
+                    'test1_dataImportFieldLabel',
+                    'test1_targetObjectName',
+                    'test1_targetFieldAPIName',
+                    'test1_importedRecordField',
+                    'test1_importedRecordStatusField'
+            );
+
+            BDI_HelpTextCMT.MappingDetail mapping2 = new BDI_HelpTextCMT.MappingDetail(
+                    'test2_dataImportObjectName',
+                    'test2_dataImportFieldLabel',
+                    'test2_targetObjectName',
+                    'test2_targetFieldAPIName',
+                    'test2_importedRecordField',
+                    'test2_importedRecordStatusField'
+            );
+
             return new Map<String, BDI_HelpTextCMT.MappingDetail>{
-                    '1' => null, '2' => null
+                    '1' => mapping1, '2' => mapping2
             };
         } else {
             return null;
         }
-
     }
 }

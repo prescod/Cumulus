@@ -86,6 +86,7 @@ public class BDI_MigrationMappingUtility {
 
         Map<String, BDI_HelpTextCMT.MappingDetail> listHelpTextFieldDetails =
                 helper.getAllMappedHelpTextFields();
+        System.debug(LoggingLevel.ERROR, '*** variable value listHelpTextFieldDetails: ' + listHelpTextFieldDetails);
 
         Map<String, Data_Import_Object_Mapping__mdt> existingObjectMappings =
                 getDefaultObjectMappings(DEFAULT_OBJECT_MAPPING_SET.Id);

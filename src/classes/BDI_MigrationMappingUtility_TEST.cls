@@ -18,13 +18,22 @@ private class BDI_MigrationMappingUtility_TEST {
         BDI_MigrationMappingUtility util = new BDI_MigrationMappingUtility();
         util.buildCustomMetadataRecordsFromHelpText(mock_BDI_MigrationMappingHelper);
 
-        //3. Verify results
-        List<Data_Import_Field_Mapping__mdt> dataImportFieldMappings = getDataImportFieldMappings();
-        System.debug(LoggingLevel.ERROR, '*** variable value: ' + dataImportFieldMappings);
-        System.assertEquals(1, dataImportFieldMappings.size());
+        //3. Verify results - if we were doing regular DML for the net new (pending) mappings, we might do this to verify:
+        List<Data_Import_Field_Mapping__mdt> mockedDataImportFieldMappings = getMockedDataImportFieldMappings();
+//        System.assertEquals(2, mockedDataImportFieldMappings.size());
+
+        //But since we are deploying the metadata, we'll probably need to simply inspect the property of the instance
+        System.debug(LoggingLevel.ERROR, '*** variable value: ' + util.pendingCMTs);
+        //Confirm that "pendingCMTs" now contains the mocked mappings that will be deployed...
+        //...
+        //...
     }
 
-    private static List<Data_Import_Field_Mapping__mdt> getDataImportFieldMappings(){
-        return [SELECT Id, Label, DeveloperName, Source_Field_API_Name__c FROM Data_Import_Field_Mapping__mdt];
+    private static List<Data_Import_Field_Mapping__mdt> getMockedDataImportFieldMappings() {
+        return [
+                SELECT Id, Label, DeveloperName, Source_Field_API_Name__c
+                FROM Data_Import_Field_Mapping__mdt
+                WHERE Label IN ('1','2')
+        ];
     }
 }
