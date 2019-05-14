@@ -94,6 +94,7 @@ public with sharing class STG_PanelDataImportMapping_CTRL extends STG_Panel {
     * @description the jobId of the deployment
     */
     public String jobId { get; private set; }
+    public String deploymentId { get; private set; }
 
     /*******************************************************************************************************
     * @description List of help text mappings that conflicts with our packaged default custom metatadata type mappings
@@ -124,16 +125,23 @@ public with sharing class STG_PanelDataImportMapping_CTRL extends STG_Panel {
     }
 
     //todo: try to reference conflicts, etc, directly in the utility instance variables
+    @TestVisible
     private BDI_MigrationMappingUtility migrationMappingUtility;
 
-    //TODO: every time this page is loaded we should get the custom settings,
-    //check for a deploymentId
-    //check the status (maybe date/time info?) of that deployment
-    //OR, the button could load that says "check status" ? //na
-    //OR, we just do like what is currently in docs for crlp conversion: https://powerofus.force.com/s/article/NPSP-Enable-Cust-Rollups --
-    // just tell them they can safely navigate away.
+    private String deploymentStatus;
+
     public STG_PanelDataImportMapping_CTRL() {
         this.migrationMappingUtility = new BDI_MigrationMappingUtility(new BDI_MigrationMappingHelper());
+        //check custom settings to see if we have a previous deployment Id
+        // If so, check its status
+        // If completed, display error or success info, possibly allow re-attempt
+        // If not yet completed, simply display status or something, but don't let them re-deploy until previous job is complete
+        checkDeploymentStatus();
+        // If status is pending or in progress, disable toggle
+    }
+
+    private Boolean hasDeploymentInProgress(){
+        // check status of Id in custom settings - if in progress return true so we don't kick off another deploy while one is in progress
     }
 
     /*******************************************************************************************************
@@ -141,7 +149,13 @@ public with sharing class STG_PanelDataImportMapping_CTRL extends STG_Panel {
     * @return null
     */
     public PageReference enableDataImportFieldMapping() {
-        STG_SettingsManager_CTRL.idPanelCurrent = idPanel();
+        STG_SettingsManager_CTRL.idPanelCurrent = idPanel(); //Q: why do we do this here?
+
+        //todo: implement hasDeploymentInProgress by getting Id from custom settings and running checkDeployStatus()
+        if (hasDeploymentInProgress()) {
+            //todo: display message that deployment is in progress.
+            return;
+        }
 
         Savepoint sp = Database.setSavepoint();
         try {
@@ -150,17 +164,21 @@ public with sharing class STG_PanelDataImportMapping_CTRL extends STG_Panel {
             // Check to see if we have any existing help text mappings that conflict with our default cmt mappings
             migrationMappingUtility.buildCustomMetadataRecordsFromHelpText();
 
-            if (!migrationMappingUtility.conflictingCMTs.isEmpty()) {
+//            if (!migrationMappingUtility.conflictingCMTs.isEmpty()) {
+            if (migrationMappingUtility.hasMappingConflict()) {
                 isPolling = false;
                 //todo: access instance variables directly
                 conflictingCMTs = migrationMappingUtility.conflictingCMTs;
-                pendingCMTs = migrationMappingUtility.pendingCMTs;
+                pendingCMTs = migrationMappingUtility.pendingCMTs; //Q: why do we do this here?
                 // TODO turn into custom label, placeholder warning message
                 ApexPages.addMessage(new ApexPages.Message(ApexPages.Severity.WARNING, 'We\'ve found some conflicts. Please resolve them before proceeding.'));
-            } else {
-                jobId = migrationMappingUtility.convertLegacyHelpTextToCustomMetadata();
+            } else { //no conflicts, deploy!
+//                jobId = migrationMappingUtility.convertLegacyHelpTextToCustomMetadata();
+                deploymentId = migrationMappingUtility.deployCustomMetadata();
+                isPolling = true;
             }
 
+            //TODO: shouldn't need this if we mock
             if (Test.isRunningTest()) {
                 jobId = '123';
             }
@@ -176,24 +194,13 @@ public with sharing class STG_PanelDataImportMapping_CTRL extends STG_Panel {
     * @description Action Method to disable CMDT mapping, save custom setting
     * @return void
     */
+    //TODO: should we call this "disableAdvancedMapping()?"
     public PageReference disableDataImportFieldMapping() {
         STG_SettingsManager_CTRL.idPanelCurrent = idPanel();
 
-        try {
-            isPolling = true;
-            conflictingCMTs.clear();
-            pendingCMTs.clear();
+        //TODO: all we need to do here is set the custom setting "isAdvancedMappingEnabled" to false and save it
+        //todo:probably need to add isAdvancedMappingEnabled custom setting field
 
-            BDI_MigrationMappingUtility migrationMappingUtility = new BDI_MigrationMappingUtility();
-
-            Map<String, String> statusMap = new Map<String, String>{migrationMappingUtility.jobId => 'Data Import Field Mapping Disabled'};
-            dataImportSettings = CMT_MetadataAPI.setHelpTextMigrationSettings(statusMap, false);
-
-        } catch (Exception e) {
-            ERR_Handler.processError(e, ERR_Handler_API.Context.STTG);
-            ApexPages.addMessage(new ApexPages.Message(ApexPages.Severity.ERROR, e.getMessage()));
-        }
-        return null;
     }
 
     /*******************************************************************************************************
@@ -201,30 +208,13 @@ public with sharing class STG_PanelDataImportMapping_CTRL extends STG_Panel {
     * @return void
     */
     public PageReference checkDeploymentStatus() {
-        timeoutCount++;
+        //TODO: use checkDeployStatus() https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_checkdeploystatus.htm
 
-        dataImportSettings = UTIL_CustomSettingsFacade.getDataImportSettings();
-        String newStatus = dataImportSettings.CMT_API_Status__c;
+        //todo: get Id from settings (fresh ie always requery using checkDeployStatus())
+        Id previousDeploymentRequestId = dataImportSettings.<deploymentIdField>;
+        DeployResult deployResult = metadatabinding.checkDeployStatus(previousDeploymentRequestId, true);
+        //inspect deploy result, set status, display to user or take action
 
-        if (timeoutCount > MAX_TIME_OUT) {
-            isPolling = false;
-            ApexPages.addMessage(new ApexPages.Message(ApexPages.Severity.WARNING, Label.stgDeploymentTimedOut + ' ' + Label.stgDeploymentTryAgain));
-            return null;
-        }
-
-        if (newStatus != null && !String.isEmpty(newStatus)) {
-            isPolling = false;
-
-            if (newStatus.contains('Succeeded') || newStatus.contains('empty')) {
-                ApexPages.addMessage(new ApexPages.Message(ApexPages.Severity.CONFIRM, Label.stgDeploymentCustomMetadataMappingEnabled));
-            } else if (newStatus.contains('Disabled')) {
-                ApexPages.addMessage(new ApexPages.Message(ApexPages.Severity.CONFIRM, Label.stgDeploymentHelpTextMappingEnabled));
-            } else {
-                ApexPages.addMessage(new ApexPages.Message(ApexPages.Severity.ERROR, newStatus +' '+ Label.stgDeploymentTryAgain));
-            }
-
-            return null;
-        }
 
         return null;
     }
