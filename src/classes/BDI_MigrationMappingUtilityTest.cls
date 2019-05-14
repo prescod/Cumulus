@@ -58,6 +58,20 @@ private class BDI_MigrationMappingUtilityTest {
         System.assertEquals('New Mapping', cmt.label);
     }
 
+    @isTest
+    static void migrationUtilityDetectsConflicts(){
+        //setup conflicting data
+        //confirm that the utility identified conflicts correctly
+    }
+
+    @isTest
+    static void migrationUtilityHandlesRepeatedToggle(){
+        //if there is a deployment in progress, the Utility should not submit another deployment
+
+        //if the previous deployment is finished... (then what?) (should only need to be
+        //successfully migrated once, right?) or should we allow multiple deployment/(activation)?
+    }
+
     @IsTest
     static void migrationUtilityDeploysWithMetadata() {
         // Create a mock version of the BDI_MigrationUtilityHelper class.
