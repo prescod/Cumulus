@@ -146,16 +146,13 @@ public with sharing class STG_PanelDataImportMapping_CTRL extends STG_Panel {
         Savepoint sp = Database.setSavepoint();
         try {
             isPolling = true;
-            conflictingCMTs.clear();
-            pendingCMTs.clear();
-
-            BDI_MigrationMappingUtility migrationMappingUtility = new BDI_MigrationMappingUtility();
 
             // Check to see if we have any existing help text mappings that conflict with our default cmt mappings
             migrationMappingUtility.buildCustomMetadataRecordsFromHelpText();
 
             if (!migrationMappingUtility.conflictingCMTs.isEmpty()) {
                 isPolling = false;
+                //todo: access instance variables directly
                 conflictingCMTs = migrationMappingUtility.conflictingCMTs;
                 pendingCMTs = migrationMappingUtility.pendingCMTs;
                 // TODO turn into custom label, placeholder warning message
