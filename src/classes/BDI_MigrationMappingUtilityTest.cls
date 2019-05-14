@@ -47,8 +47,8 @@ private class BDI_MigrationMappingUtilityTest {
                         new BDI_MigrationMappingHelperMock());
 
         // Call build method
-        BDI_MigrationMappingUtility util = new BDI_MigrationMappingUtility();
-        util.buildCustomMetadataRecordsFromHelpText(mock_BDI_MigrationMappingHelper);
+        BDI_MigrationMappingUtility util = new BDI_MigrationMappingUtility(new BDI_MigrationMappingHelper());
+        util.buildCustomMetadataRecordsFromHelpText();
 
         // Confirm that we have a new pending data import field mapping waiting to be deployed
         System.assertEquals(1, util.pendingCMTs.size());
@@ -67,8 +67,8 @@ private class BDI_MigrationMappingUtilityTest {
                         new BDI_MigrationMappingHelperMock());
 
         // Call the method
-        BDI_MigrationMappingUtility util = new BDI_MigrationMappingUtility();
-        util.buildCustomMetadataRecordsFromHelpText(mock_BDI_MigrationMappingHelper);
+        BDI_MigrationMappingUtility util = new BDI_MigrationMappingUtility(new BDI_MigrationMappingHelper());
+        util.buildCustomMetadataRecordsFromHelpText();
 
         Test.startTest();
 
@@ -95,7 +95,7 @@ private class BDI_MigrationMappingUtilityTest {
 
     @IsTest
     static void migrationUtilityDeploysWithoutMetadata() {
-        BDI_MigrationMappingUtility util = new BDI_MigrationMappingUtility();
+        BDI_MigrationMappingUtility util = new BDI_MigrationMappingUtility(new BDI_MigrationMappingHelper());
 
         Test.startTest();
         // Convert mappings to Custom Metadata and start deployment
