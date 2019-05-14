@@ -45,6 +45,7 @@ public class BDI_MigrationMappingUtility {
     /** @description Metadata parked due to conflicts with our default cmt records */
     public List<BDI_HelpTextCMT.DataImportFieldMapping> pendingCMTs = new List<BDI_HelpTextCMT.DataImportFieldMapping>();
 
+    //todo: we shouldn't need this anymore if saving and using deploymentId
     /** @description Unique job id for Custom Settings */
     public String jobId = getUniqueJobId();
 
@@ -52,15 +53,40 @@ public class BDI_MigrationMappingUtility {
         return conflictingCMTs != null && conflictingCMTs.size() > 0;
     }
 
+    /** @description Name of default packaged Object Mapping Set */
+    private static final String DEFAULT_OBJECT_MAPPING_SET_RECORD_NAME = 'Default_Object_Mapping_Set';
+
+    /** @description Name of default packaged Field Mapping Set */
+    private static final String DEFAULT_FIELD_MAPPING_SET_RECORD_NAME = 'Default_Field_Mapping_Set';
+
+    /** @description Default packaged Object Mapping Set metadata record */
+    private static final Data_Import_Object_Mapping_Set__mdt DEFAULT_OBJECT_MAPPING_SET = [SELECT
+            Id,
+            DeveloperName,
+            Label
+    FROM Data_Import_Object_Mapping_Set__mdt
+    WHERE DeveloperName = :DEFAULT_OBJECT_MAPPING_SET_RECORD_NAME];
+
+    /** @description Default packaged Field Mapping Set metadata record */
+    private static final Data_Import_Field_Mapping_Set__mdt DEFAULT_FIELD_MAPPING_SET = [SELECT
+            Id,
+            DeveloperName,
+            Label
+    FROM Data_Import_Field_Mapping_Set__mdt
+    WHERE DeveloperName = :DEFAULT_FIELD_MAPPING_SET_RECORD_NAME];
+
+
 //todo: add description
     public Id deploymentId;
 
     private BDI_MigrationMappingHelper helper;
+    private Data_Import_Settings__c dataImportSettings;
 
     //todo: create a constructor that takes an instance of the Helper and saves it to a variable, so
     //we dont have to pass it in the signature for the buildCustomMetadataRecordsFromHelpText method
     public BDI_MigrationMappingUtility(BDI_MigrationMappingHelper helper) {
         this.helper = helper;
+        this.dataImportSettings = UTIL_CustomSettingsFacade.getDataImportSettings();
     }
 
 
@@ -71,27 +97,57 @@ public class BDI_MigrationMappingUtility {
      * object and is needed to ensure that the status retrieved from that custom settings object is for this
      * particular deployment and not a previous one.
      */
-    public String convertLegacyHelpTextToCustomMetadata() {
+//    public String convertLegacyHelpTextToCustomMetadata() {
+    public Id deployCustomMetadata() {
 
-        if (!queuedMetadataTypesForDeploy.isEmpty()) {
-            CMT_MetadataAPI.deployMetadata(jobId, queuedMetadataTypesForDeploy.clone(), 
-                CMT_MetadataAPI.Source.HELP_TEXT_MIGRATION);
+        if (queuedMetadataTypesForDeploy.isEmpty()) {
+            //nothing to deploy
+            return null;
         } else {
-            // Queue is empty, but we still need to update Data Import settings
-            updateCustomDataImportSettings(jobId, Label.bdiCustomObjectMappingSummary);
+            try {
+                Metadata.DeployContainer deploymentContainer = new Metadata.DeployContainer();
+                for (Metadata.CustomMetadata customMetadataRecord : queuedMetadataTypesForDeploy) {
+                    deploymentContainer.addMetadata((Metadata.Metadata) customMetadataRecord);
+                }
+                deploymentId = Metadata.Operations.enqueueDeployment(deploymentContainer, new DeploymentCallback());
+            } catch (Exception e) {
+                System.debug(LoggingLevel.ERROR, '*** e: ' + e);
+                throw new DeploymentException('There was an error attempting to deploy the custom metadata records.');
+            }
+            saveDeploymentId();
         }
 
-        return jobId;
+        return deploymentId;
     }
 
-    /**
-     * @description Update the custom data import settings field mapping method field
-     * @param fieldMappingMethod String
-     */
-    private void updateCustomDataImportSettings(String jobId, String fieldMappingMethod) {
-        Map<String, String> statusMap = new Map<String, String>{jobId => 'Queue was empty'};
-        CMT_MetadataAPI.setHelpTextMigrationSettings(statusMap, true);
+    private class DeploymentException extends Exception {}
+
+    //copied from docs - TODO: implement our handler here
+    public class DeploymentCallback implements Metadata.DeployCallback {
+        public void handleResult(Metadata.DeployResult result,
+                Metadata.DeployCallbackContext context) {
+            if (result.status == Metadata.DeployStatus.Succeeded) {
+                // Deployment was successful
+                //TODO: update Field_Mapping_Method__c in custom setting to reflect successful enablement of advanced mapping
+            } else {
+                // Deployment was not successful
+                //TODO: In this case it failed, and we would want to store the error and notify the user (generally speaking)
+            }
+        }
     }
+
+    private void saveDeploymentId() {
+        //todo: save to custom settings field
+    }
+
+//    /**
+//     * @description Update the custom data import settings field mapping method field
+//     * @param fieldMappingMethod String
+//     */
+//    private void updateCustomDataImportSettings(String jobId, String fieldMappingMethod) {
+//        Map<String, String> statusMap = new Map<String, String>{jobId => 'Queue was empty'};
+//        CMT_MetadataAPI.setHelpTextMigrationSettings(statusMap, true);
+//    }
 
     /**
      * @description Collect all Help Text field mappings and compare against default Field Mapping Metadata 
@@ -206,28 +262,6 @@ public class BDI_MigrationMappingUtility {
 
         return foundMismatch;
     }
-
-    /** @description Name of default packaged Object Mapping Set */
-    private static final String DEFAULT_OBJECT_MAPPING_SET_RECORD_NAME = 'Default_Object_Mapping_Set';
-
-    /** @description Name of default packaged Field Mapping Set */
-    private static final String DEFAULT_FIELD_MAPPING_SET_RECORD_NAME = 'Default_Field_Mapping_Set';
-
-    /** @description Default packaged Object Mapping Set metadata record */
-    private static final Data_Import_Object_Mapping_Set__mdt DEFAULT_OBJECT_MAPPING_SET = [SELECT 
-                Id, 
-                DeveloperName, 
-                Label
-        FROM Data_Import_Object_Mapping_Set__mdt
-        WHERE DeveloperName = :DEFAULT_OBJECT_MAPPING_SET_RECORD_NAME];
-
-    /** @description Default packaged Field Mapping Set metadata record */
-    private static final Data_Import_Field_Mapping_Set__mdt DEFAULT_FIELD_MAPPING_SET = [SELECT 
-                Id, 
-                DeveloperName, 
-                Label
-        FROM Data_Import_Field_Mapping_Set__mdt
-        WHERE DeveloperName = :DEFAULT_FIELD_MAPPING_SET_RECORD_NAME];
 
     /**
      * @return A 10 character unique 'jobId' to use for
