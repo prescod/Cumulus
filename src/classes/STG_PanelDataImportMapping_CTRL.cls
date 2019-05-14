@@ -123,6 +123,19 @@ public with sharing class STG_PanelDataImportMapping_CTRL extends STG_Panel {
         set;
     }
 
+    //todo: try to reference conflicts, etc, directly in the utility instance variables
+    private BDI_MigrationMappingUtility migrationMappingUtility;
+
+    //TODO: every time this page is loaded we should get the custom settings,
+    //check for a deploymentId
+    //check the status (maybe date/time info?) of that deployment
+    //OR, the button could load that says "check status" ? //na
+    //OR, we just do like what is currently in docs for crlp conversion: https://powerofus.force.com/s/article/NPSP-Enable-Cust-Rollups --
+    // just tell them they can safely navigate away.
+    public STG_PanelDataImportMapping_CTRL() {
+        this.migrationMappingUtility = new BDI_MigrationMappingUtility(new BDI_MigrationMappingHelper());
+    }
+
     /*******************************************************************************************************
     * @description Action Method to enable CMDT mapping, save custom setting
     * @return null
@@ -139,7 +152,7 @@ public with sharing class STG_PanelDataImportMapping_CTRL extends STG_Panel {
             BDI_MigrationMappingUtility migrationMappingUtility = new BDI_MigrationMappingUtility();
 
             // Check to see if we have any existing help text mappings that conflict with our default cmt mappings
-            migrationMappingUtility.buildCustomMetadataRecordsFromHelpText(new BDI_MigrationMappingHelper());
+            migrationMappingUtility.buildCustomMetadataRecordsFromHelpText();
 
             if (!migrationMappingUtility.conflictingCMTs.isEmpty()) {
                 isPolling = false;
