@@ -48,6 +48,22 @@ public class BDI_MigrationMappingUtility {
     /** @description Unique job id for Custom Settings */
     public String jobId = getUniqueJobId();
 
+    public Boolean hasMappingConflict() {
+        return conflictingCMTs != null && conflictingCMTs.size() > 0;
+    }
+
+//todo: add description
+    public Id deploymentId;
+
+    private BDI_MigrationMappingHelper helper;
+
+    //todo: create a constructor that takes an instance of the Helper and saves it to a variable, so
+    //we dont have to pass it in the signature for the buildCustomMetadataRecordsFromHelpText method
+    public BDI_MigrationMappingUtility(BDI_MigrationMappingHelper helper) {
+        this.helper = helper;
+    }
+
+
     /**
      * @description Calls method for building custom metadata mapping from help text mapping
      * @param  deployIt Boolean
