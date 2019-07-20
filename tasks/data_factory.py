@@ -41,51 +41,64 @@ def make_factories(session, classes, SFactory):
         npe01__opportunity__c = factory.LazyAttribute(lambda o: o.opportunity.id)
         amount = factory.LazyAttribute(lambda o: o.opportunity.amount)
         payment_date = factory.Sequence( lambda n: START_DATE + timedelta(days=n) )
+        scheduled_date = factory.LazyAttribute(lambda o: o.payment_date)
+        paid = False
 
     class OpportunityFactory(SFactory):
         class Meta:
             model = classes.opportunities
             sqlalchemy_session = Session   # the SQLAlchemy session object
             sqlalchemy_session_persistence = "commit"
-            exclude = ("account",)
+            exclude = ("account", "_with_payment", "_payments")
+        class Params:
+            paid = factory.Trait(
+                _payments = []
+            )
+            _with_payment = True
         account = None
         amount = "opportunity amount set"
         id = factory.Sequence(lambda n: n+1)
         name = factory.LazyAttribute(lambda o: f"Account {o.account.id} Donation")
         account_id = factory.LazyAttribute(lambda o: o.account.id)
         close_date = factory.Sequence( lambda n: START_DATE + timedelta(days=n) )
-        _payments = factory.RelatedFactoryList(PaymentFactory,
-                                               "opportunity", 2)
+        _payments = factory.LazyAttribute(lambda o:
+            PaymentFactory.create_batch(3, opportunity = o))
 
     class AccountFactory(SFactory):
         class Meta:
             model = classes.accounts 
             sqlalchemy_session = Session   # the SQLAlchemy session object
             sqlalchemy_session_persistence = "commit"
-            exclude = ("_opportunities", "_amount")
+            exclude = ("_opportunities", "_amount", "_paid", "_with_payment")
 
         class Params:
             _amount = "Account amount not set"
+            _paid = True
+            _with_payment = True
 
         id = factory.Sequence(lambda n: n+1)
         
         name = factory.LazyAttribute(lambda self: f'Account {self.id}')
         record_type = "Organization"
         _opportunities = factory.RelatedFactoryList(OpportunityFactory, "account", 2,
-            amount=factory.LazyAttribute(lambda o: o.factory_parent._amount)
+            amount=factory.LazyAttribute(lambda o: o.factory_parent._amount),
+            _with_payment=factory.LazyAttribute(lambda o: o.factory_parent._with_payment),
         )
-
 
     class ContactFactory(SFactory):
         class Meta:
             model = classes.contacts #
             sqlalchemy_session = Session   # the SQLAlchemy session object
             sqlalchemy_session_persistence = "commit"
+            exclude = ("_opportunities", "_amount", "_paid", "_with_payment")
+
+        class Params:
+            _amount = "Account amount not set"
+            _paid = True
+            _with_payment = True
 
         id = factory.Sequence(lambda n: n)
         name = factory.Sequence(lambda n: u'Contact %d' % n)
-
-
 
     return Factories(vars())
 
@@ -112,9 +125,10 @@ class DataFactoryTask(BatchDataTask):
         session.commit()
 
     def make_all_records(self, batch_size, factories):
-        a = factories.AccountFactory.create_batch(10,
-                _amount=100,
-                )
-        from pprint import pprint
-        pprint(a[0])
-        pprint(dir(a[0]))
+        factories.AccountFactory.create_batch(batch_size, _amount=100, _paid=False, _with_payment=True)
+        factories.AccountFactory.create_batch(batch_size, _amount=200, _paid=False, _with_payment=True)
+        factories.AccountFactory.create_batch(batch_size, _amount=300, _paid=False, _with_payment=True)
+        factories.AccountFactory.create_batch(batch_size, _amount=400, _paid=True, _with_payment=True)
+        factories.AccountFactory.create_batch(batch_size, _amount=500, _with_payment=False)
+
+        factories.ContactFactory.create_batch(batch_size, _amount=500, _with_payment=False)
