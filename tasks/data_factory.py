@@ -100,6 +100,20 @@ def make_factories(session, classes, SFactory):
         id = factory.Sequence(lambda n: n)
         name = factory.Sequence(lambda n: u'Contact %d' % n)
 
+    class DataImportFactory(SFactory):
+        class Meta:
+            model = classes.npsp__DataImport__c
+            sqlalchemy_session = Session   # the SQLAlchemy session object
+            sqlalchemy_session_persistence = "commit"
+
+        id = factory.Sequence(lambda n: n)
+        npsp__Donation_Date__c = factory.Sequence( lambda n: START_DATE + timedelta(days=n) )
+        npsp__Do_Not_Automatically_Create_Payment__c = "FALSE"
+
+        npsp__Account1_Name__c = factory.Sequence(lambda n: f'Account {n}')
+        npsp__Contact1_Lastname__c = factory.Sequence(lambda n: f"Contact {n}")
+
+
     return Factories(vars())
 
 def Factories(stuff):
@@ -119,16 +133,69 @@ class DataFactoryTask(BatchDataTask):
         factories = make_factories(session, base.classes, SQLAlchemyModelFactory)
         num_records = int(self.options["num_records"])
         batch_size = math.floor(num_records / 10)
-        self.make_all_records(batch_size, factories)
-        # self.generate_bdi_denormalized_table(num_records)
+        self.make_preexisting_records(batch_size, factories)
+        self.make_nonmatching_records(batch_size, factories)
+        batch_size = math.floor(num_records / 4)
+        self.make_matching_records(batch_size, factories)
         session.flush()
         session.commit()
 
-    def make_all_records(self, batch_size, factories):
+    def make_preexisting_records(self, batch_size, factories):
         factories.AccountFactory.create_batch(batch_size, _amount=100, _paid=False, _with_payment=True)
         factories.AccountFactory.create_batch(batch_size, _amount=200, _paid=False, _with_payment=True)
         factories.AccountFactory.create_batch(batch_size, _amount=300, _paid=False, _with_payment=True)
         factories.AccountFactory.create_batch(batch_size, _amount=400, _paid=True, _with_payment=True)
         factories.AccountFactory.create_batch(batch_size, _amount=500, _with_payment=False)
 
-        factories.ContactFactory.create_batch(batch_size, _amount=500, _with_payment=False)
+        factories.ContactFactory.create_batch(batch_size, _amount=600, _paid=False, _with_payment=False)
+        factories.ContactFactory.create_batch(batch_size, _amount=700, _paid=False, _with_payment=False)
+        factories.ContactFactory.create_batch(batch_size, _amount=800, _paid=False, _with_payment=False)
+        factories.ContactFactory.create_batch(batch_size, _amount=900, _paid=True, _with_payment=False)
+        factories.ContactFactory.create_batch(batch_size, _amount=1000, _with_payment=False)
+
+        factories.ContactFactory.create_batch(batch_size, _amount=1000, _with_payment=False)
+
+
+    def make_nonmatching_records(self, batch_size, factories):
+        factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 100, 
+                                                 npsp__Donation_Donor__c = "Account1")
+        factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 200, 
+                                                 npsp__Donation_Donor__c = "Account1", 
+                                                 npsp__Qualified_Date__c = '2020-01-01')
+        factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 50, 
+                                                 npsp__Donation_Donor__c = "Account1")
+        factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 400, 
+                                                 npsp__Donation_Donor__c = "Account1")
+        factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 500, 
+                                                 npsp__Donation_Donor__c = "Account1")
+
+        factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 600, 
+                                                 npsp__Donation_Donor__c = "Contact1")
+        factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 700, 
+                                                 npsp__Donation_Donor__c = "Contact1",
+                                                 npsp__Qualified_Date__c = '2020-01-01')
+        factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 50, 
+                                                 npsp__Donation_Donor__c = "Contact1")
+        factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 900, 
+                                                 npsp__Donation_Donor__c = "Contact1")
+        factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 1000, 
+                                                 npsp__Donation_Donor__c = "Contact1")
+
+    def make_matching_records(self, batch_size, factories):
+        factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 100, 
+                    npsp__Donation_Donor__c = "Account1",
+                    npsp__Do_Not_Automatically_Create_Payment__c = False)
+
+        factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 200, 
+            npsp__Donation_Donor__c = "Account1",
+            npsp__Do_Not_Automatically_Create_Payment__c = True)
+
+        factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 300,
+            npsp__Donation_Donor__c = "Contact1",
+            npsp__Do_Not_Automatically_Create_Payment__c = False
+            )
+
+        factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 400,
+            npsp__Donation_Donor__c = "Contact1",
+            npsp__Do_Not_Automatically_Create_Payment__c = True
+            )
