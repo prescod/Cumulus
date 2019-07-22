@@ -23,7 +23,7 @@ from factory import enums
 import factory
 
 START_DATE = date(2019, 1, 1)
-enums.SPLITTER ="++"
+enums.SPLITTER = "___"
 
 class Adder:
     def __init__(self, x=0):
@@ -38,7 +38,7 @@ class Adder:
 
 def makeSFMeta(session):
     class SFMeta:
-        sqlalchemy_session = session   # the SQLAlchemy session object
+        sqlalchemy_session = session
         sqlalchemy_session_persistence = "commit"
     return SFMeta
 
@@ -86,13 +86,12 @@ def make_factories(session, classes, SFactory):
             exclude = ("payment_paid", "with_payment")
 
         class Params:
-            opportunity_amount = "Account opportunity_amount not set"
             opportunity_date_adder = "Adder not set"  # leading underscore breaks things.
             payment_paid = -1
             with_payment = True
             payment_amount = "Payment amount not set"
             opportunity = factory.RelatedFactory( OpportunityFactory, "account",
-                amount=factory.LazyAttribute(lambda o: o.factory_parent.opportunity_amount),
+                amount=factory.LazyAttribute(lambda o: o.factory_parent.opportunity___amount),
                 with_payment=factory.LazyAttribute(lambda o: o.factory_parent.payment_paid > -1),
                 close_date=factory.LazyAttribute(lambda o: START_DATE + timedelta(days=o.factory_parent.opportunity_date_adder(1)-1)),
             )
@@ -108,13 +107,13 @@ def make_factories(session, classes, SFactory):
             exclude = ("payment_paid", "with_payment")
 
         class Params:
-            opportunity_amount = "Contact opportunity_amount not set"
+            opportunity___amount = "Contact opportunity___amount not set"
             payment_paid = -1
             with_payment = True
             opportunity_date_adder = "Adder not set"  # leading underscore breaks things.
             payment_amount = "Payment amount not set"
             opportunity = factory.RelatedFactory( OpportunityFactory, "primary_contact",
-                amount=factory.LazyAttribute(lambda o: o.factory_parent.opportunity_amount),
+                amount=factory.LazyAttribute(lambda o: o.factory_parent.opportunity___amount),
                 with_payment=factory.LazyAttribute(lambda o: o.factory_parent.payment_paid > -1),
                 close_date=factory.LazyAttribute(lambda o: START_DATE + timedelta(days=o.factory_parent.opportunity_date_adder(1)-1)),
             )
@@ -166,35 +165,35 @@ class DataFactoryTask(BatchDataTask):
         session.commit()
 
     def make_preexisting_records(self, batch_size, factories):
-        factories.AccountFactory.create_batch(batch_size, opportunity_amount=100, 
+        factories.AccountFactory.create_batch(batch_size, opportunity___amount=100,
                                                payment_amount=100,
                                                payment_paid=False, 
                                               with_payment=True, opportunity_date_adder=Adder())
-        factories.AccountFactory.create_batch(batch_size, opportunity_amount=200, payment_paid=False, 
+        factories.AccountFactory.create_batch(batch_size, opportunity___amount=200, payment_paid=False, 
                                                 with_payment=True, opportunity_date_adder=Adder(),
                                                 payment_amount=200)
-        factories.AccountFactory.create_batch(batch_size, opportunity_amount=300, payment_paid=False, 
+        factories.AccountFactory.create_batch(batch_size, opportunity___amount=300, payment_paid=False, 
                                                 with_payment=True, opportunity_date_adder=Adder(),
                                                 payment_amount=50)
-        factories.AccountFactory.create_batch(batch_size, opportunity_amount=400, payment_paid=True, 
+        factories.AccountFactory.create_batch(batch_size, opportunity___amount=400, payment_paid=True, 
                                                 with_payment=True, opportunity_date_adder=Adder(),
                                                 payment_amount=50)
-        factories.AccountFactory.create_batch(batch_size, opportunity_amount=500,
+        factories.AccountFactory.create_batch(batch_size, opportunity___amount=500,
                                                 with_payment=False, opportunity_date_adder=Adder())
 
-        factories.ContactFactory.create_batch(batch_size, opportunity_amount=600, payment_paid=False,
+        factories.ContactFactory.create_batch(batch_size, opportunity___amount=600, payment_paid=False,
                                                 with_payment=False, opportunity_date_adder=Adder(),
                                                 payment_amount=600)
-        factories.ContactFactory.create_batch(batch_size, opportunity_amount=700, payment_paid=False, 
+        factories.ContactFactory.create_batch(batch_size, opportunity___amount=700, payment_paid=False, 
                                                 with_payment=False, opportunity_date_adder=Adder(),
                                                 payment_amount=700)
-        factories.ContactFactory.create_batch(batch_size, opportunity_amount=800, payment_paid=False, 
+        factories.ContactFactory.create_batch(batch_size, opportunity___amount=800, payment_paid=False, 
                                                 with_payment=False, opportunity_date_adder=Adder(),
                                                 payment_amount=50)
-        factories.ContactFactory.create_batch(batch_size, opportunity_amount=900, payment_paid=True, 
+        factories.ContactFactory.create_batch(batch_size, opportunity___amount=900, payment_paid=True, 
                                                 with_payment=False, opportunity_date_adder=Adder(),
                                                 payment_amount=50)
-        factories.ContactFactory.create_batch(batch_size, opportunity_amount=1000, 
+        factories.ContactFactory.create_batch(batch_size, opportunity___amount=1000, 
                                                 with_payment=False, opportunity_date_adder=Adder())
 
     def make_nonmatching_import_records(self, batch_size, factories):
