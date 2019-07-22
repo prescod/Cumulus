@@ -45,7 +45,8 @@ class BatchDataTask(BaseSalesforceApiTask):
             else:
                 sqlite_path = os.path.join(tempdir, "generated_data.db")
             url = "sqlite:///" + sqlite_path
-            self._generate_data(url, mapping_file)
+            num_records = int(self.options["num_records"])
+            self._generate_data(url, mapping_file, num_records)
             subtask_config = TaskConfig(
                 {"options": {"database_url": url, "mapping": mapping_file}}
             )
@@ -59,13 +60,13 @@ class BatchDataTask(BaseSalesforceApiTask):
             )
             subtask()
 
-    def _generate_data(self, db_url, mapping_file_path):
+    def _generate_data(self, db_url, mapping_file_path, num_records):
         """Generate all of the data"""
         with open(mapping_file_path, "r") as f:
             mappings = ordered_yaml_load(f)
 
         session, base = init_db(db_url, mappings)
-        self.generate_data(session, base)
+        self.generate_data(session, base, num_records)
         self.session.commit()
 
     def generate_data(self, session, base):
@@ -82,10 +83,9 @@ class Adder:
 
 
 class GenerateBDIData(BatchDataTask):
-    def generate_data(self, session, base):
+    def generate_data(self, session, base, num_records):
         self.session = session
         self.base = base
-        num_records = int(self.options["num_records"])
         batch_size = math.floor(num_records / 10)
         self.make_all_records(batch_size)
         self.generate_bdi_denormalized_table(num_records)

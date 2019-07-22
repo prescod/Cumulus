@@ -25,93 +25,119 @@ import factory
 START_DATE = date(2019, 1, 1)
 enums.SPLITTER ="++"
 
-Session = orm.scoped_session(orm.sessionmaker())
+class Adder:
+    def __init__(self, x=0):
+        self.x = x
+
+    def __call__(self, value):
+        self.x += value
+        return int(self.x)
+    
+    def reset(self, x):
+        self.x = x
+
+def makeSFMeta(session):
+    class SFMeta:
+        sqlalchemy_session = session   # the SQLAlchemy session object
+        sqlalchemy_session_persistence = "commit"
+    return SFMeta
+
 
 # SFactory could be a metaclass that injects the session
 def make_factories(session, classes, SFactory):
+    SFMeta = makeSFMeta(session)
     class PaymentFactory(SFactory):
-        class Meta:
+        class Meta(SFMeta):
             model = classes.payments #
-            sqlalchemy_session = Session   # the SQLAlchemy session object
-            sqlalchemy_session_persistence = "commit"
-            exclude = ("opportunity",)
 
-        opportunity = "Opportunity not set"
-        id = factory.Sequence(lambda n: n)
+        class Params:
+            date_adder_ = Adder(0)  # leading underscore breaks things.
+            opportunity = "Opportunity not set"
+
+        id = factory.Sequence(lambda n: n+1)
         npe01__opportunity__c = factory.LazyAttribute(lambda o: o.opportunity.id)
-        amount = factory.LazyAttribute(lambda o: o.opportunity.amount)
-        payment_date = factory.Sequence( lambda n: START_DATE + timedelta(days=n) )
+        amount = factory.LazyAttribute(lambda o: o.factory_parent.factory_parent.payment_amount)
+        payment_date = factory.LazyAttribute( lambda o: o.factory_parent.close_date)
         scheduled_date = factory.LazyAttribute(lambda o: o.payment_date)
-        paid = False
+        paid = factory.LazyAttribute(lambda o: o.factory_parent.factory_parent.payment_paid)
 
     class OpportunityFactory(SFactory):
-        class Meta:
+        class Meta(SFMeta):
             model = classes.opportunities
-            sqlalchemy_session = Session   # the SQLAlchemy session object
-            sqlalchemy_session_persistence = "commit"
-            exclude = ("account", "_with_payment", "_payments")
+            exclude = ("account", "primary_contact", "_payments")
         class Params:
-            paid = factory.Trait(
-                _payments = []
+            with_payment = factory.Trait(
+                _payments = factory.RelatedFactory( PaymentFactory, "opportunity")
             )
-            _with_payment = True
+
         account = None
-        amount = "opportunity amount set"
+        primary_contact = None
+        amount = "opportunity amount snot set"
+        stage_name = "Prospecting"
         id = factory.Sequence(lambda n: n+1)
-        name = factory.LazyAttribute(lambda o: f"Account {o.account.id} Donation")
-        account_id = factory.LazyAttribute(lambda o: o.account.id)
-        close_date = factory.Sequence( lambda n: START_DATE + timedelta(days=n) )
-        _payments = factory.LazyAttribute(lambda o:
-            PaymentFactory.create_batch(3, opportunity = o))
+        name = factory.LazyAttribute(lambda o: f"{o.factory_parent.name} Donation")
+        account_id = factory.LazyAttribute(lambda o: o.account and o.account.id)
+        primary_contact__c = factory.LazyAttribute(lambda o: o.primary_contact and o.primary_contact.id)
+        close_date = "Close date not set"
 
     class AccountFactory(SFactory):
-        class Meta:
+        class Meta(SFMeta):
             model = classes.accounts 
-            sqlalchemy_session = Session   # the SQLAlchemy session object
-            sqlalchemy_session_persistence = "commit"
-            exclude = ("_opportunities", "_amount", "_paid", "_with_payment")
+            exclude = ("payment_paid", "with_payment")
 
         class Params:
-            _amount = "Account amount not set"
-            _paid = True
-            _with_payment = True
+            opportunity_amount = "Account opportunity_amount not set"
+            opportunity_date_adder = "Adder not set"  # leading underscore breaks things.
+            payment_paid = -1
+            with_payment = True
+            payment_amount = "Payment amount not set"
+            opportunity = factory.RelatedFactory( OpportunityFactory, "account",
+                amount=factory.LazyAttribute(lambda o: o.factory_parent.opportunity_amount),
+                with_payment=factory.LazyAttribute(lambda o: o.factory_parent.payment_paid > -1),
+                close_date=factory.LazyAttribute(lambda o: START_DATE + timedelta(days=o.factory_parent.opportunity_date_adder(1)-1)),
+            )
 
         id = factory.Sequence(lambda n: n+1)
         
         name = factory.LazyAttribute(lambda self: f'Account {self.id}')
         record_type = "Organization"
-        _opportunities = factory.RelatedFactoryList(OpportunityFactory, "account", 2,
-            amount=factory.LazyAttribute(lambda o: o.factory_parent._amount),
-            _with_payment=factory.LazyAttribute(lambda o: o.factory_parent._with_payment),
-        )
 
     class ContactFactory(SFactory):
-        class Meta:
+        class Meta(SFMeta):
             model = classes.contacts #
-            sqlalchemy_session = Session   # the SQLAlchemy session object
-            sqlalchemy_session_persistence = "commit"
-            exclude = ("_opportunities", "_amount", "_paid", "_with_payment")
+            exclude = ("payment_paid", "with_payment")
 
         class Params:
-            _amount = "Account amount not set"
-            _paid = True
-            _with_payment = True
+            opportunity_amount = "Contact opportunity_amount not set"
+            payment_paid = -1
+            with_payment = True
+            opportunity_date_adder = "Adder not set"  # leading underscore breaks things.
+            payment_amount = "Payment amount not set"
+            opportunity = factory.RelatedFactory( OpportunityFactory, "primary_contact",
+                amount=factory.LazyAttribute(lambda o: o.factory_parent.opportunity_amount),
+                with_payment=factory.LazyAttribute(lambda o: o.factory_parent.payment_paid > -1),
+                close_date=factory.LazyAttribute(lambda o: START_DATE + timedelta(days=o.factory_parent.opportunity_date_adder(1)-1)),
+            )
 
-        id = factory.Sequence(lambda n: n)
-        name = factory.Sequence(lambda n: u'Contact %d' % n)
+        id = factory.Sequence(lambda n: n + 1)
+        name = factory.Sequence(lambda n: u'Contact %d' % (n + 1))
 
     class DataImportFactory(SFactory):
-        class Meta:
+        class Meta(SFMeta):
             model = classes.npsp__DataImport__c
-            sqlalchemy_session = Session   # the SQLAlchemy session object
-            sqlalchemy_session_persistence = "commit"
 
-        id = factory.Sequence(lambda n: n)
-        npsp__Donation_Date__c = factory.Sequence( lambda n: START_DATE + timedelta(days=n) )
+        class Params:
+            date_adder = "Adder not set"  # leading underscore breaks things.
+            ContactAdder = Adder(0)
+            AccountAdder = Adder(0)
+
+        id = factory.Sequence(lambda n: n+1)
+        npsp__Donation_Date__c=factory.LazyAttribute(lambda o: START_DATE + timedelta(days=o.date_adder(1)-1))
+
         npsp__Do_Not_Automatically_Create_Payment__c = "FALSE"
 
-        npsp__Account1_Name__c = factory.Sequence(lambda n: f'Account {n}')
-        npsp__Contact1_Lastname__c = factory.Sequence(lambda n: f"Contact {n}")
+        npsp__Account1_Name__c = None
+        npsp__Contact1_Lastname__c = None
 
 
     return Factories(vars())
@@ -124,78 +150,128 @@ def Factories(stuff):
 
 
 class DataFactoryTask(BatchDataTask):
-    def _generate_data(self, db_url, mapping_file_path):
+    def _generate_data(self, db_url, mapping_file_path, num_records):
         """Generate all of the data"""
         with open(mapping_file_path, "r") as f:
             mappings = ordered_yaml_load(f)
 
         session, base = init_db(db_url, mappings)
         factories = make_factories(session, base.classes, SQLAlchemyModelFactory)
-        num_records = int(self.options["num_records"])
         batch_size = math.floor(num_records / 10)
         self.make_preexisting_records(batch_size, factories)
-        self.make_nonmatching_records(batch_size, factories)
+        self.make_nonmatching_import_records(batch_size, factories)
         batch_size = math.floor(num_records / 4)
         self.make_matching_records(batch_size, factories)
         session.flush()
         session.commit()
 
     def make_preexisting_records(self, batch_size, factories):
-        factories.AccountFactory.create_batch(batch_size, _amount=100, _paid=False, _with_payment=True)
-        factories.AccountFactory.create_batch(batch_size, _amount=200, _paid=False, _with_payment=True)
-        factories.AccountFactory.create_batch(batch_size, _amount=300, _paid=False, _with_payment=True)
-        factories.AccountFactory.create_batch(batch_size, _amount=400, _paid=True, _with_payment=True)
-        factories.AccountFactory.create_batch(batch_size, _amount=500, _with_payment=False)
+        factories.AccountFactory.create_batch(batch_size, opportunity_amount=100, 
+                                               payment_amount=100,
+                                               payment_paid=False, 
+                                              with_payment=True, opportunity_date_adder=Adder())
+        factories.AccountFactory.create_batch(batch_size, opportunity_amount=200, payment_paid=False, 
+                                                with_payment=True, opportunity_date_adder=Adder(),
+                                                payment_amount=200)
+        factories.AccountFactory.create_batch(batch_size, opportunity_amount=300, payment_paid=False, 
+                                                with_payment=True, opportunity_date_adder=Adder(),
+                                                payment_amount=50)
+        factories.AccountFactory.create_batch(batch_size, opportunity_amount=400, payment_paid=True, 
+                                                with_payment=True, opportunity_date_adder=Adder(),
+                                                payment_amount=50)
+        factories.AccountFactory.create_batch(batch_size, opportunity_amount=500,
+                                                with_payment=False, opportunity_date_adder=Adder())
 
-        factories.ContactFactory.create_batch(batch_size, _amount=600, _paid=False, _with_payment=False)
-        factories.ContactFactory.create_batch(batch_size, _amount=700, _paid=False, _with_payment=False)
-        factories.ContactFactory.create_batch(batch_size, _amount=800, _paid=False, _with_payment=False)
-        factories.ContactFactory.create_batch(batch_size, _amount=900, _paid=True, _with_payment=False)
-        factories.ContactFactory.create_batch(batch_size, _amount=1000, _with_payment=False)
+        factories.ContactFactory.create_batch(batch_size, opportunity_amount=600, payment_paid=False,
+                                                with_payment=False, opportunity_date_adder=Adder(),
+                                                payment_amount=600)
+        factories.ContactFactory.create_batch(batch_size, opportunity_amount=700, payment_paid=False, 
+                                                with_payment=False, opportunity_date_adder=Adder(),
+                                                payment_amount=700)
+        factories.ContactFactory.create_batch(batch_size, opportunity_amount=800, payment_paid=False, 
+                                                with_payment=False, opportunity_date_adder=Adder(),
+                                                payment_amount=50)
+        factories.ContactFactory.create_batch(batch_size, opportunity_amount=900, payment_paid=True, 
+                                                with_payment=False, opportunity_date_adder=Adder(),
+                                                payment_amount=50)
+        factories.ContactFactory.create_batch(batch_size, opportunity_amount=1000, 
+                                                with_payment=False, opportunity_date_adder=Adder())
 
-        factories.ContactFactory.create_batch(batch_size, _amount=1000, _with_payment=False)
-
-
-    def make_nonmatching_records(self, batch_size, factories):
+    def make_nonmatching_import_records(self, batch_size, factories):
         factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 100, 
-                                                 npsp__Donation_Donor__c = "Account1")
+                                                 npsp__Donation_Donor__c = "Account1",
+                                                 npsp__Account1_Name__c = factory.LazyAttribute(lambda o: f"Account {o.AccountAdder(1)}"),
+                                                 date_adder=Adder()
+                                                 )
         factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 200, 
                                                  npsp__Donation_Donor__c = "Account1", 
-                                                 npsp__Qualified_Date__c = '2020-01-01')
+                                                 npsp__Account1_Name__c = factory.LazyAttribute(lambda o: f"Account {o.AccountAdder(1)}"),
+                                                 npsp__Qualified_Date__c = '2020-01-01',
+                                                 date_adder=Adder()                                                 
+                                                 )
         factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 50, 
-                                                 npsp__Donation_Donor__c = "Account1")
+                                                 npsp__Donation_Donor__c = "Account1",
+                                                 npsp__Account1_Name__c = factory.LazyAttribute(lambda o: f"Account {o.AccountAdder(1)}"),
+                                                 date_adder=Adder())
         factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 400, 
-                                                 npsp__Donation_Donor__c = "Account1")
+                                                 npsp__Donation_Donor__c = "Account1",
+                                                 npsp__Account1_Name__c = factory.LazyAttribute(lambda o: f"Account {o.AccountAdder(1)}"),
+                                                 date_adder=Adder())
         factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 500, 
-                                                 npsp__Donation_Donor__c = "Account1")
-
+                                                 npsp__Donation_Donor__c = "Account1",
+                                                 npsp__Account1_Name__c = factory.LazyAttribute(lambda o: f"Account {o.AccountAdder(1)}"),
+                                                 date_adder=Adder())
         factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 600, 
-                                                 npsp__Donation_Donor__c = "Contact1")
+                                                 npsp__Donation_Donor__c = "Contact1",
+                                                 npsp__Contact1_Lastname__c = factory.LazyAttribute(lambda o: f"Contact {o.ContactAdder(1)}"),
+                                                 date_adder=Adder())
         factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 700, 
                                                  npsp__Donation_Donor__c = "Contact1",
-                                                 npsp__Qualified_Date__c = '2020-01-01')
+                                                 npsp__Qualified_Date__c = '2020-01-01',
+                                                 npsp__Contact1_Lastname__c = factory.LazyAttribute(lambda o: f"Contact {o.ContactAdder(1)}"),
+                                                 date_adder=Adder())
         factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 50, 
-                                                 npsp__Donation_Donor__c = "Contact1")
+                                                 npsp__Donation_Donor__c = "Contact1",
+                                                 npsp__Contact1_Lastname__c = factory.LazyAttribute(lambda o: f"Contact {o.ContactAdder(1)}"),
+                                                 date_adder=Adder())
         factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 900, 
-                                                 npsp__Donation_Donor__c = "Contact1")
+                                                 npsp__Donation_Donor__c = "Contact1",
+                                                 npsp__Contact1_Lastname__c = factory.LazyAttribute(lambda o: f"Contact {o.ContactAdder(1)}"),
+                                                 date_adder=Adder())
         factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 1000, 
-                                                 npsp__Donation_Donor__c = "Contact1")
+                                                 npsp__Donation_Donor__c = "Contact1",
+                                                 npsp__Contact1_Lastname__c = factory.LazyAttribute(lambda o: f"Contact {o.ContactAdder(1)}"),
+                                                 date_adder=Adder())
 
     def make_matching_records(self, batch_size, factories):
+
+        newadder = Adder(0)
         factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 100, 
                     npsp__Donation_Donor__c = "Account1",
-                    npsp__Do_Not_Automatically_Create_Payment__c = False)
+                    npsp__Do_Not_Automatically_Create_Payment__c = "FALSE",
+                    npsp__Account1_Name__c = factory.LazyAttribute(lambda o: f"Account{o.AccountAdder(1)}"),
+                    AccountAdder = newadder,
+                    date_adder=Adder())
 
         factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 200, 
             npsp__Donation_Donor__c = "Account1",
-            npsp__Do_Not_Automatically_Create_Payment__c = True)
+            npsp__Do_Not_Automatically_Create_Payment__c = "TRUE",
+            npsp__Account1_Name__c = factory.LazyAttribute(lambda o: f"Account{o.AccountAdder(1)}"),
+            AccountAdder = newadder,
+            date_adder=Adder())
+
+        contactadder = Adder(0)
 
         factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 300,
             npsp__Donation_Donor__c = "Contact1",
-            npsp__Do_Not_Automatically_Create_Payment__c = False
-            )
+            npsp__Do_Not_Automatically_Create_Payment__c = "FALSE",
+            ContactAdder = contactadder,
+            npsp__Contact1_Lastname__c = factory.LazyAttribute(lambda o: f"Contact{o.ContactAdder(1)}"),
+            date_adder=Adder())
 
         factories.DataImportFactory.create_batch(batch_size, npsp__Donation_Amount__c = 400,
             npsp__Donation_Donor__c = "Contact1",
-            npsp__Do_Not_Automatically_Create_Payment__c = True
-            )
+            npsp__Do_Not_Automatically_Create_Payment__c = "TRUE",
+            npsp__Contact1_Lastname__c = factory.LazyAttribute(lambda o: f"Contact{o.ContactAdder(1)}"),
+            ContactAdder = contactadder,
+            date_adder=Adder())
