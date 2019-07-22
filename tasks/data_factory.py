@@ -55,8 +55,8 @@ def make_factories(session, classes, SFactory):
             opportunity = "Opportunity not set"
 
         id = factory.Sequence(lambda n: n+1)
-        npe01__opportunity__c = factory.LazyAttribute(lambda o: o.opportunity.id)
-        amount = factory.LazyAttribute(lambda o: o.factory_parent.factory_parent.payment_amount)
+        amount = -1
+        npe01__opportunity__c = factory.LazyAttribute(lambda o: o.opportunity and o.opportunity.id)
         payment_date = factory.LazyAttribute( lambda o: o.factory_parent.close_date)
         scheduled_date = factory.LazyAttribute(lambda o: o.payment_date)
         paid = factory.LazyAttribute(lambda o: o.factory_parent.factory_parent.payment_paid)
@@ -64,10 +64,10 @@ def make_factories(session, classes, SFactory):
     class OpportunityFactory(SFactory):
         class Meta(SFMeta):
             model = classes.opportunities
-            exclude = ("account", "primary_contact", "_payments")
+            exclude = ("account", "primary_contact", "payment")
         class Params:
             with_payment = factory.Trait(
-                _payments = factory.RelatedFactory( PaymentFactory, "opportunity")
+                payment = factory.RelatedFactory( PaymentFactory, "opportunity")
             )
 
         account = None
@@ -79,6 +79,7 @@ def make_factories(session, classes, SFactory):
         account_id = factory.LazyAttribute(lambda o: o.account and o.account.id)
         primary_contact__c = factory.LazyAttribute(lambda o: o.primary_contact and o.primary_contact.id)
         close_date = "Close date not set"
+        payment = None
 
     class AccountFactory(SFactory):
         class Meta(SFMeta):
@@ -89,9 +90,8 @@ def make_factories(session, classes, SFactory):
             opportunity_date_adder = "Adder not set"  # leading underscore breaks things.
             payment_paid = -1
             with_payment = True
-            payment_amount = "Payment amount not set"
+            opportunity___payment___amount = "Payment amount not set"
             opportunity = factory.RelatedFactory( OpportunityFactory, "account",
-                amount=factory.LazyAttribute(lambda o: o.factory_parent.opportunity___amount),
                 with_payment=factory.LazyAttribute(lambda o: o.factory_parent.payment_paid > -1),
                 close_date=factory.LazyAttribute(lambda o: START_DATE + timedelta(days=o.factory_parent.opportunity_date_adder(1)-1)),
             )
@@ -107,13 +107,11 @@ def make_factories(session, classes, SFactory):
             exclude = ("payment_paid", "with_payment")
 
         class Params:
-            opportunity___amount = "Contact opportunity___amount not set"
             payment_paid = -1
             with_payment = True
             opportunity_date_adder = "Adder not set"  # leading underscore breaks things.
-            payment_amount = "Payment amount not set"
+            opportunity___payment___amount = "Payment amount not set"
             opportunity = factory.RelatedFactory( OpportunityFactory, "primary_contact",
-                amount=factory.LazyAttribute(lambda o: o.factory_parent.opportunity___amount),
                 with_payment=factory.LazyAttribute(lambda o: o.factory_parent.payment_paid > -1),
                 close_date=factory.LazyAttribute(lambda o: START_DATE + timedelta(days=o.factory_parent.opportunity_date_adder(1)-1)),
             )
@@ -166,33 +164,33 @@ class DataFactoryTask(BatchDataTask):
 
     def make_preexisting_records(self, batch_size, factories):
         factories.AccountFactory.create_batch(batch_size, opportunity___amount=100,
-                                               payment_amount=100,
+                                               opportunity___payment___amount=100,
                                                payment_paid=False, 
                                               with_payment=True, opportunity_date_adder=Adder())
         factories.AccountFactory.create_batch(batch_size, opportunity___amount=200, payment_paid=False, 
                                                 with_payment=True, opportunity_date_adder=Adder(),
-                                                payment_amount=200)
+                                                opportunity___payment___amount=200)
         factories.AccountFactory.create_batch(batch_size, opportunity___amount=300, payment_paid=False, 
                                                 with_payment=True, opportunity_date_adder=Adder(),
-                                                payment_amount=50)
+                                                opportunity___payment___amount=50)
         factories.AccountFactory.create_batch(batch_size, opportunity___amount=400, payment_paid=True, 
                                                 with_payment=True, opportunity_date_adder=Adder(),
-                                                payment_amount=50)
+                                                opportunity___payment___amount=50)
         factories.AccountFactory.create_batch(batch_size, opportunity___amount=500,
                                                 with_payment=False, opportunity_date_adder=Adder())
 
         factories.ContactFactory.create_batch(batch_size, opportunity___amount=600, payment_paid=False,
                                                 with_payment=False, opportunity_date_adder=Adder(),
-                                                payment_amount=600)
+                                                opportunity___payment___amount=600)
         factories.ContactFactory.create_batch(batch_size, opportunity___amount=700, payment_paid=False, 
                                                 with_payment=False, opportunity_date_adder=Adder(),
-                                                payment_amount=700)
+                                                opportunity___payment___amount=700)
         factories.ContactFactory.create_batch(batch_size, opportunity___amount=800, payment_paid=False, 
                                                 with_payment=False, opportunity_date_adder=Adder(),
-                                                payment_amount=50)
+                                                opportunity___payment___amount=50)
         factories.ContactFactory.create_batch(batch_size, opportunity___amount=900, payment_paid=True, 
                                                 with_payment=False, opportunity_date_adder=Adder(),
-                                                payment_amount=50)
+                                                opportunity___payment___amount=50)
         factories.ContactFactory.create_batch(batch_size, opportunity___amount=1000, 
                                                 with_payment=False, opportunity_date_adder=Adder())
 
